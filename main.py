@@ -2,37 +2,22 @@ __author__ = 'juju'
 import hashlib, time, os, random, string, uuid
 from secretsharing import SecretSharer
 
-#Available Hash Functions
-hs = hashlib
-if hasattr(hashlib, 'algorithms_available'):
-    hs_funcs = hashlib.algorithms_available
-else:
-    hs_funcs = ('md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512')
-
-def sha1(HASHME):
-    return str(hs.sha1(HASHME).hexdigest())
+#Hash Functions
 def sha256(HASHME):
-    return str(hs.sha256(HASHME).hexdigest())
-def md5(HASHME):
-    return str(hashlib.md5(HASHME).hexdigest())
-def sha224(HASHME):
-    return str(hs.sha224(HASHME).hexdigest())
-def sha384(HASHME):
-    return str(hs.sha384(HASHME).hexdigest())
-def sha512(HASHME):
-    return str(hs.sha512(HASHME).hexdigest())
+    return str(hashlib.sha256(HASHME).hexdigest())
 
+#Random Data
 def randSeed(TEST):
     return os.urandom(TEST)
 def randomword(length):
    return ''.join(random.choice(string.hexdigits) for i in range(length))
 def randuuid():
     return str(uuid.uuid4())
-#Returns time as Unix timestamp
 def gettime():
     ts = int(time.time())
     return ts
 
+#Secret Sharing
 def secretsplit(SECRET):
     shares = SecretSharer.split_secret(SECRET, 2, 3)
     shares = secretstripper(shares)
@@ -40,7 +25,6 @@ def secretsplit(SECRET):
         shares = SecretSharer.split_secret(SECRET, 2, 3)
         shares = secretstripper(shares)
     return shares
-
 def secretrecover(shares):
     return str(SecretSharer.recover_secret(shares))
 def secretstripper(shares):
@@ -55,6 +39,8 @@ def sharefixer(shares):
         nushares.append(str(i)+'-'+share)
         i+=1
     return nushares
+
+#Hash Buffers
 def hashbuff256():
     #Initialize our empty storage
     buffer = ''
@@ -75,7 +61,6 @@ def hashbuff256():
     #Last 64 Bytes are Hash of the 192 Byte Buffer
     buffer = buffer + sha256(buffer)
     return str(buffer)
-
 def hashbuff64():
     #Initialize our empty storage
     buffer = ''
@@ -96,7 +81,6 @@ def hashbuff64():
     #Last 64 Bytes are Hash of the 192 Byte Buffer
     buffer = buffer + sha256(buffer)
     return str(buffer[:64])
-
 def hashbuff1024():
     block = hashbuff256()
     block += hashbuff256()
@@ -107,20 +91,15 @@ def hashbuff1024():
 #print 'Buffer: ' + str(hashbuff1024())
 #print 'Buffer: ' + str(len(hashbuff1024()))
 
-def sharetest():
-    secret = 'c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a'
+def sharetest(secret):
     print 'Secret: ' + secret
     shares = secretsplit(secret)
-    print 'Before Strip: ' + str(shares)
-    shares = secretstripper(shares)
-    print 'After Strip: ' + str(shares)
-    shares = sharefixer(shares)
-    print 'Fix Shares: ' + str(shares)
-    print str(secretrecover(shares))
-    if secret == str(secretrecover(shares)):
-        print 'Pass'
-    else:
-        print 'Fail'
+    gencert(19,23,59, shares)
+    recshares = recoverKey(19,23,59)
+    if shares == recshares:
+        print 'Share Test Passed'
+        if secret == secretrecover(sharefixer(shares)):
+            print 'Secret Test Passed'
 
 def gencert(FIRSTSECRET,SECONDSECRET,THRIRDSECRET, SHARES):
     if len(SHARES) == 3:
@@ -174,7 +153,7 @@ def recoverKey(FIRSTSECRET,SECONDSECRET,THRIRDSECRET):
     f.close()
     return shares
 
-def printcert():
+def printkey():
     with open("cert.key") as f:
         content = f.readlines()
         print content
@@ -182,13 +161,4 @@ def printcert():
     return 1
 
 secret = 'c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a'
-print 'Secret: ' + secret
-shares = secretsplit(secret)
-gencert(19,23,59, shares)
-#printcert()
-recshares = recoverKey(19,23,59)
-
-if shares == recshares:
-    print 'Share Test Passed'
-    if secret == secretrecover(sharefixer(shares)):
-        print 'Secret Test Passed'
+sharetest(secret)
