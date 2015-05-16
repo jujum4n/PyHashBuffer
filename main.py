@@ -2,10 +2,6 @@ __author__ = 'juju'
 import hashlib, time, os, random, string, uuid
 from secretsharing import SecretSharer
 
-#Test Data
-rslug = 'test-slug-for-hashing'
-rnums = 12323890
-
 #Available Hash Functions
 hs = hashlib
 if hasattr(hashlib, 'algorithms_available'):
@@ -36,13 +32,6 @@ def randuuid():
 def gettime():
     ts = int(time.time())
     return ts
-
-def test():
-    print randomword(8192)
-    print hs_funcs
-
-def addts():
-    return gettime()
 
 def secretsplit(SECRET):
     shares = SecretSharer.split_secret(SECRET, 2, 3)
@@ -138,7 +127,7 @@ def gencert(FIRSTSECRET,SECONDSECRET,THRIRDSECRET, SHARES):
         if(FIRSTSECRET!=SECONDSECRET or FIRSTSECRET!=THRIRDSECRET or SECONDSECRET!=THRIRDSECRET):
             f = open("cert.key", "wb")
             i = 0
-            #Write 1 MB worth of data to file
+            #Write data to file
             while i < 1024:
                 if i == FIRSTSECRET:
                     f.write(SHARES[0])
@@ -162,7 +151,7 @@ def recoverKey(FIRSTSECRET,SECONDSECRET,THRIRDSECRET):
     f = open("cert.key", "rb")
     i = 0
     shares = []
-    #Write 1 MB worth of data to file
+    #Read data from file
     while i < 1024:
         if i == FIRSTSECRET:
             temp = f.read(64)
