@@ -1,29 +1,21 @@
 __author__ = 'juju'
-import hashlib, time, os, random, string, uuid
+import hashlib, time, os, uuid
 from secretsharing import SecretSharer
 
-#Hash Functions
-def sha256(HASHME):
-    return str(hashlib.sha256(HASHME).hexdigest())
-
-#Random Data
+# Random Data
 def randSeed(TEST):
     return os.urandom(TEST)
-def randomword(length):
-   return ''.join(random.choice(string.hexdigits) for i in range(length))
 def randuuid():
     return str(uuid.uuid4())
 def gettime():
     ts = int(time.time())
     return ts
 
-#Secret Sharing
+# Secret Sharing
 def secretsplit(SECRET):
-    shares = SecretSharer.split_secret(SECRET, 2, 3)
-    shares = secretstripper(shares)
-    while len(shares[0]+shares[1]+shares[2]) != 192:
-        shares = SecretSharer.split_secret(SECRET, 2, 3)
-        shares = secretstripper(shares)
+    shares = secretstripper(SecretSharer.split_secret(SECRET, 2, 3))
+    while len(shares[0] + shares[1] + shares[2]) != 192:
+        shares = secretstripper(SecretSharer.split_secret(SECRET, 2, 3))
     return shares
 def secretrecover(shares):
     return str(SecretSharer.recover_secret(shares))
@@ -33,140 +25,172 @@ def secretstripper(shares):
         nushare.append(share[2:])
     return nushare
 def sharefixer(shares):
-    i=1
+    i = 1
     nushares = []
     for share in shares:
-        nushares.append(str(i)+'-'+share)
-        i+=1
+        nushares.append(str(i) + '-' + share)
+        i += 1
     return nushares
 
-#Hash Buffers
+# Hash Buffing
+def sha256(HASHME):
+    return str(hashlib.sha256(HASHME).hexdigest())
+def hashbuff256():
+    # Initialize our empty storage
+    buffer = ''
+    # Hash(Seed)+Hash(uuid_buffer)+Hash(ts_buffer)
+    buffer += sha256(randSeed(1024)) + sha256(randuuid()) + sha256(str(gettime()))
+    # Last 64 Bytes are Hash of the 192 Byte Buffer
+    return str(buffer + sha256(buffer))
+def hashbuff64():
+    # Returns the last 64 of hashbuff256 which is a sha256(random 1024 seed+random uuid+hash of timestamp)
+    return str(hashbuff256()[:64])
 def hashbuff1():
     return str(hashbuff64()[:1])
-def hashbuff2():
-    return str(hashbuff64()[:2])
-def hashbuff4():
-    return str(hashbuff64()[:4])
-def hashbuff8():
-    return str(hashbuff64()[:8])
-def hashbuff16():
-    return str(hashbuff64()[:16])
-def hashbuff32():
-    return str(hashbuff64()[:32])
-def hashbuff64():
-    #Returns the last 64 of hashbuff256 which is a sha256(random 1024 seed+random uuid+hash of timestamp)
-    return str(hashbuff256()[:64])
-def hashbuff256():
-    #Initialize our empty storage
-    buffer = ''
-    ts_buffer = []
-    uuid_buffer = []
 
-    #Add timestamp and random uuid
-    uuid_buffer.append(randuuid())
-    ts_buffer.append(gettime())
-    #Generate random 1024 seed
-    seed = randSeed(1024)
-    #Hash(Seed)+Hash(uuid_buffer)+Hash(ts_buffer)
-    buffer += sha256(seed)
-    buffer += sha256(uuid_buffer[0])
-    buffer += sha256(str(ts_buffer[0]))
+#Tries to rule out invalid input, shift larger than 64 or tries saving secret in same spot
+def inpvalidator(FIRSTSECRET, SECONDSECRET, THRIRDSECRET):
+    valid = False
+    if(FIRSTSECRET[0] != SECONDSECRET[0] or FIRSTSECRET[0] != THRIRDSECRET[0] or SECONDSECRET[0] != THRIRDSECRET[0]):
+        if(FIRSTSECRET[1] <= 64 and SECONDSECRET[1] <= 64 and THRIRDSECRET[1] <= 64 ):
+            valid = True
+    return valid
 
-    #Hash(currentbuffer)
-    #Last 64 Bytes are Hash of the 192 Byte Buffer
-    return str(buffer + sha256(buffer))
-def hashbuff1024():
-    block = hashbuff256()
-    block += hashbuff256()
-    toshuffle = hashbuff256() + hashbuff256()
-    shuffled = ''.join(random.sample(toshuffle, len(toshuffle)))
-    return str(block+shuffled)
-
-def gencert(FIRSTSECRET,SECONDSECRET,THRIRDSECRET, SHARES):
+#Current implementation of gencert, which takes in pairs of integers to give an offset and a shift
+def gencert(FIRSTSECRET, SECONDSECRET, THRIRDSECRET, SHARES):
     if len(SHARES) == 3:
-        if(FIRSTSECRET!=SECONDSECRET or FIRSTSECRET!=THRIRDSECRET or SECONDSECRET!=THRIRDSECRET):
+        if inpvalidator(FIRSTSECRET,SECONDSECRET,THRIRDSECRET) == True:
             f = open("cert.key", "wb")
             i = 0
-            #Write data to file
+            # Write data to file
             while i < 16384:
-                if i == FIRSTSECRET:
+                if i == FIRSTSECRET[0]:
+                    shifted = 0
+                    while shifted < FIRSTSECRET[1]:
+                        f.write(hashbuff1())
+                        shifted += 1
                     f.write(SHARES[0])
-                    #print 'Writing first share'
-                    i+=1
-                if i == SECONDSECRET:
+                    shifted = 0
+                    while shifted < (64 - FIRSTSECRET[1]):
+                        f.write(hashbuff1())
+                        shifted += 1
+                    i += 2
+                if i == SECONDSECRET[0]:
+                    shifted = 0
+                    while shifted < SECONDSECRET[1]:
+                        f.write(hashbuff1())
+                        shifted += 1
                     f.write(SHARES[1])
-                    #print 'Writing second share'
-                    i+=1
-                if i == THRIRDSECRET:
+                    shifted = 0
+                    while shifted < (64 - SECONDSECRET[1]):
+                        f.write(hashbuff1())
+                        shifted += 1
+                    i += 2
+                if i == THRIRDSECRET[0]:
+                    shifted = 0
+                    while shifted < THRIRDSECRET[1]:
+                        f.write(hashbuff1())
+                        shifted += 1
                     f.write(SHARES[2])
-                    #print 'Writing third share'
-                    i+=1
+                    shifted = 0
+                    while shifted < (64 - THRIRDSECRET[1]):
+                        f.write(hashbuff1())
+                        shifted += 1
+                    i += 2
                 else:
                     f.write(hashbuff64())
-                    i+=1
+                    i += 1
             f.close()
     return 1
 
-def recoverKey(FIRSTSECRET,SECONDSECRET,THRIRDSECRET):
+def recoverKey(FIRSTSECRET, SECONDSECRET, THRIRDSECRET):
     f = open("cert.key", "rb")
     i = 0
-    shares = ['','','']
-    #Read data from file
+    shares = ['', '', '']
     while i < 16384:
-        if i == FIRSTSECRET:
-            temp = f.read(64)
-            #print 'First share: ' + str(temp)
-            shares[0] = str(temp)
-            i+=1
-        if i == SECONDSECRET:
-            temp = f.read(64)
-            #print 'Second share: ' + str(temp)
-            shares[1] = str(temp)
-            i+=1
-        if i == THRIRDSECRET:
-            temp = f.read(64)
-            #print 'Third share: ' + str(temp)
-            shares[2] = str(temp)
-            i+=1
+        if i == FIRSTSECRET[0]:
+            shifted = 0
+            while shifted < FIRSTSECRET[1]:
+                shifted += 1
+                f.read(1)
+            shares[0] = f.read(64)
+            shifted = 0
+            while shifted < (64 - FIRSTSECRET[1]):
+                shifted += 1
+                f.read(1)
+            i += 2
+        if i == SECONDSECRET[0]:
+            shifted = 0
+            while shifted < SECONDSECRET[1]:
+                shifted += 1
+                f.read(1)
+            shares[1] = f.read(64)
+            shifted = 0
+            while shifted < (64 - SECONDSECRET[1]):
+                shifted += 1
+                f.read(1)
+            i += 2
+        if i == THRIRDSECRET[0]:
+            shifted = 0
+            while shifted < THRIRDSECRET[1]:
+                shifted += 1
+                f.read(1)
+            shares[2] = f.read(64)
+            shifted = 0
+            while shifted < (64 - THRIRDSECRET[1]):
+                shifted += 1
+                f.read(1)
+            i += 2
         else:
-            i+=1
+            i += 1
             f.read(64)
     f.close()
     return shares
 
-def printkey():
-    with open("cert.key") as f:
-        content = f.readlines()
-        print content
-    f.close()
-    return 1
-
-def testall(secret):
-    print 'Running Tests:'
-    totalpassed=0
-    totalfailed=0
+#Tests most everything to veriify things are not breaking quickly
+def testall(secret,FIRSTSECRET,SECONDSECRET,THIRDSECRET):
+    print 'Running Strong Tests:'
+    if os.path.isfile('cert.key'):
+        os.remove('cert.key')
+    totalpassed = 0
+    totalfailed = 0
     shares = secretsplit(secret)
-    gencert(9023, 12, 1212, shares)
-    recovered_shares = recoverKey(9023, 12, 1212)
-    if shares == recovered_shares:
-        print 'Share Test Passed'
-        totalpassed+=1
-        if secret == secretrecover(sharefixer(shares)):
-            print 'Secret Test Passed'
-            totalpassed+=1
+    gencert(FIRSTSECRET, SECONDSECRET, THIRDSECRET, shares)
+    recovered_shares = recoverKey(FIRSTSECRET, SECONDSECRET, THIRDSECRET)
+    if os.path.isfile('cert.key'):
+        if shares == recovered_shares:
+            print 'Share Test Passed'
+            totalpassed += 1
+            if secret == secretrecover(sharefixer(shares)):
+                print 'Secret Test Passed'
+                totalpassed += 1
+            else:
+                totalfailed += 1
+                print 'Secret Test Failed'
         else:
-            totalfailed+=1
-            print 'Secret Test Failed'
-    else:
-        print 'Share Test Failed'
-        totalfailed+=1
-    if os.path.getsize('cert.key') == 1048576:
-        print 'Key Test Passed'
-        totalpassed+=1
-    else:
-        totalfailed+=1
-        print 'Key Test Failed'
-    print 'Total Passed: ' + str(totalpassed) + '/' + str(totalfailed+totalpassed)
+            print 'Share Test Failed'
+            totalfailed += 1
+        if os.path.getsize('cert.key') == 1048576:
+            print 'Key Test Passed'
+            totalpassed += 1
+        else:
+            totalfailed += 1
+            print 'Key Test Failed'
+        print 'Total Passed: ' + str(totalpassed) + '/' + str(totalfailed + totalpassed)
 
+def calc():
+    firstchunkpool = 16384
+    secondchunkpool = 16382
+    thirdchunkpool = 16380
+    shifts = 64
+    poss = (firstchunkpool * shifts)
+    poss = poss * (secondchunkpool * shifts)
+    poss = poss * (thirdchunkpool * shifts)
+    return poss
 
-testall('c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a')
+FIRSTSECRET = [10, 12]
+SECONDSECRET = [1322, 42]
+THIRDSECRET = [15123, 61]
+testall('c4bbcb1fbec99d65bf59d85c8cb62ee2db963f0fe106f483d9afa73bd4e39a8a', FIRSTSECRET, SECONDSECRET, THIRDSECRET)
+current_probability = str(calc())
+print 'Probability: 1/' + current_probability
